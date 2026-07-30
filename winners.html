@@ -25,7 +25,7 @@
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             background: var(--bg-gradient);
             margin: 0;
-            padding: 20px 15px;
+            padding: 10px;
             color: var(--text-main);
             min-height: 100vh;
         }
@@ -42,55 +42,54 @@
         header {
             background: #FCF7F8;
             color: #344054;
-            padding: 25px 20px;
+            padding: 20px 15px;
             text-align: center;
         }
         .banner { width: 100%; height: auto; display: block; }
-        .logo { max-height: 80px; margin-bottom: 12px; }
-        h1 { margin: 5px 0; font-size: 2.2em; font-weight: 700; letter-spacing: 0.5px; }
-        .subtitle { margin: 0; opacity: 0.9; font-size: 1.1em; }
+        h1 { margin: 5px 0; font-size: 1.8em; font-weight: 700; letter-spacing: 0.5px; }
+        .subtitle { margin: 0; opacity: 0.9; font-size: 1em; }
 
         /* Banner for Next Posting Time */
         .next-posting-banner {
             background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
             border-bottom: 2px solid #90caf9;
-            padding: 14px 20px;
+            padding: 12px 15px;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px;
+            gap: 10px;
             text-align: center;
         }
 
-        .banner-icon { font-size: 1.6em; }
+        .banner-icon { font-size: 1.4em; }
 
         .banner-text {
             color: #1565c0;
-            font-size: 0.95em;
+            font-size: 0.9em;
             font-weight: 600;
         }
 
         .posting-time-highlight {
-            font-size: 1.1em;
+            font-size: 1.05em;
             color: #0d47a1;
             font-weight: 700;
             margin-top: 2px;
         }
 
-        .content { padding: 30px 20px; }
+        .content { padding: 15px 10px; }
 
         .state-box {
             text-align: center;
             padding: 40px 20px;
             color: var(--text-muted);
-            font-size: 1.15em;
+            font-size: 1.1em;
         }
 
         .spinner {
             border: 4px solid #f3f3f3;
             border-top: 4px solid var(--primary);
             border-radius: 50%;
-            width: 40px; height: 40px;
+            width: 36px; height: 36px;
             animation: spin 1s linear infinite;
             margin: 0 auto 15px auto;
         }
@@ -100,50 +99,54 @@
             background: #fff;
             border: 1px solid #e1e8ed;
             border-radius: 14px;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.03);
             overflow: hidden;
         }
 
         .round-header {
             background: #f8fafc;
-            padding: 15px 20px;
+            padding: 12px 15px;
             border-bottom: 1px solid #e1e8ed;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
         }
 
         .round-title {
             margin: 0;
-            font-size: 1.3em;
+            font-size: 1.2em;
             color: var(--primary-dark);
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        .table-responsive { width: 100%; overflow-x: auto; }
+        /* 允許跨排滾動，保護手機視覺效果 */
+        .table-responsive { 
+            width: 100%; 
+            overflow-x: auto; 
+            -webkit-overflow-scrolling: touch;
+        }
         
         table {
             width: 100%;
+            min-width: 340px; /* 保證最小寬度不變形 */
             border-collapse: collapse;
             text-align: left;
         }
 
         th, td {
-            padding: 14px 18px;
+            padding: 10px 8px; /* 緊湊 Padding 防止過寬 */
             border-bottom: 1px solid #edf2f7;
-            font-size: 0.95em;
+            font-size: 0.88em;
+            vertical-align: middle;
         }
 
         th {
             background: #ffffff;
             color: var(--text-muted);
             font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.82em;
-            letter-spacing: 0.5px;
+            font-size: 0.78em;
+            letter-spacing: 0.3px;
+            white-space: nowrap; /* 表頭文字盡量保持同行 */
         }
 
         tr:last-child td { border-bottom: none; }
@@ -152,49 +155,57 @@
         .bottle-badge {
             background: #ebf5ff;
             color: #006adc;
-            padding: 4px 12px;
-            border-radius: 20px;
+            padding: 3px 8px;
+            border-radius: 12px;
             font-weight: 700;
-            font-size: 0.95em;
+            font-size: 0.9em;
             display: inline-block;
-            text-align: center;
+            white-space: nowrap;
         }
 
         .ticket-code {
             font-family: 'Courier New', Courier, monospace;
             font-weight: bold;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
             color: #2c3e50;
+            white-space: nowrap;
         }
 
         .no-winner {
             color: #95a5a6;
             font-style: italic;
             background: #f8f9fa;
-            padding: 4px 10px;
-            border-radius: 6px;
+            padding: 3px 6px;
+            border-radius: 4px;
             display: inline-block;
+            font-size: 0.85em;
+            white-space: nowrap;
         }
 
-        .timestamp { color: var(--text-muted); font-size: 0.9em; }
+        .timestamp { 
+            color: var(--text-muted); 
+            font-size: 0.85em;
+            white-space: nowrap;
+        }
 
         .result-detail {
             color: #4a5568;
             font-weight: 500;
-            font-size: 0.92em;
+            font-size: 0.85em;
+            line-height: 1.3;
         }
 
         .refresh-btn {
             display: block;
             width: 100%;
             max-width: 260px;
-            margin: 25px auto 0 auto;
-            padding: 12px;
+            margin: 20px auto 10px auto;
+            padding: 14px;
             background: var(--primary);
             color: white;
             border: none;
-            border-radius: 10px;
-            font-size: 0.95em;
+            border-radius: 12px;
+            font-size: 1em;
             font-weight: 600;
             cursor: pointer;
             transition: background 0.2s;
@@ -308,7 +319,6 @@
             containerEl.innerHTML = '';
 
             try {
-                // Fetch winners collection AND system > config document concurrently
                 const [winnersSnapshot, configDoc] = await Promise.all([
                     db.collection("winners").get(),
                     db.collection("system").doc("config").get().catch(() => null)
@@ -316,7 +326,6 @@
 
                 loadingEl.style.display = 'none';
 
-                // --- 2A. PROCESS CONFIG FIRST (ALWAYS BEFORE RETURNING) ---
                 let scheduleData = [];
                 if (configDoc && configDoc.exists) {
                     const data = configDoc.data();
@@ -325,12 +334,10 @@
                 }
                 updateNextPostingBanner(scheduleData);
 
-                // Record refresh click timestamp
                 if (forceRefresh) {
                     localStorage.setItem(LAST_CLICK_KEY, Date.now().toString());
                 }
 
-                // --- 2B. PROCESS WINNERS DATA SECOND ---
                 if (winnersSnapshot.empty) {
                     localStorage.setItem(CACHE_KEY, JSON.stringify([]));
                     localStorage.setItem(TIMESTAMP_KEY, Date.now().toString());
@@ -357,7 +364,6 @@
             }
         }
 
-        // --- DYNAMIC POSTING BANNER LOGIC ---
         function updateNextPostingBanner(schedule) {
             const bannerEl = document.getElementById('nextPostingBanner');
             const timeEl = document.getElementById('nextPostingTime');
@@ -371,7 +377,6 @@
             let nextPostingDate = null;
             let upcomingRoundNum = null;
 
-            // Always parse using local HH:mm to avoid UTC/timezone skew
             const parseLocalEndTime = (cfg) => {
                 const timeStr = cfg.endTime || cfg.EndTime;
                 if (!timeStr) return null;
@@ -389,12 +394,10 @@
                 return null;
             };
 
-            // Find earliest round where posting time (endTime + 5 mins) is in the future
             for (const cfg of schedule) {
                 const roundEnd = parseLocalEndTime(cfg);
                 if (!roundEnd) continue;
 
-                // Posting Time = Round End Time + 5 minutes
                 const postingTime = new Date(roundEnd.getTime() + 5 * 60 * 1000);
 
                 if (postingTime > now) {
@@ -519,7 +522,7 @@
                             <thead>
                                 <tr>
                                     <th>瓶號 / Bottle</th>
-                                    <th>票券序號 / Ticket Serial</th>
+                                    <th>票號 / Serial</th>
                                     <th>時間 / Time</th>
                                     <th>結果 / Result</th>
                                 </tr>
@@ -542,6 +545,7 @@
             return strVal.padStart(6, '0');
         }
 
+        /* 更精簡雙語結果排版 */
         function formatBilingualResult(rawDetail) {
             if (!rawDetail) return '-';
 
@@ -549,13 +553,13 @@
             if (winnerMatch) {
                 const guessVal = winnerMatch[1];
                 const actualVal = winnerMatch[2];
-                return `猜數 Guess: ${guessVal} | 答案 Answer: ${actualVal}`;
+                return `猜 Guess: ${guessVal}<br>答 Ans: ${actualVal}`;
             }
 
             const noWinnerMatch = String(rawDetail).match(/Actual:\s*([\d.]+)/i);
             if (noWinnerMatch) {
                 const actualVal = noWinnerMatch[1];
-                return `答案 Answer: ${actualVal}`;
+                return `答 Ans: ${actualVal}`;
             }
 
             return escapeHtml(rawDetail);
