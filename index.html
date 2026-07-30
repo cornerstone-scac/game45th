@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>猜中有獎 | Guess to Win All</title>
+    <style>
+        :root { --primary: #4a90e2; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #f0f4f8 0%, #c3cfe2 100%);
+            margin: 0; padding: 15px; color: #333;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.12);
+            overflow: hidden;
+        }
+        header {
+            background: #FCF7F8;
+            color: #344054;
+            padding: 25px 20px;
+            text-align: center;
+        }
+        .banner { width: 100%; height: auto; display: block; }
+        .subtitle { margin: 8px 0 0; opacity: 0.95; font-size: 1.1em; }
+        .status {
+            margin: 20px; padding: 16px; border-radius: 12px;
+            font-weight: 600; text-align: center; font-size: 1.12em;
+            line-height: 1.6;
+        }
+        .status.open { background:#d5f4e6; color:#1e8449; }
+        .status.closed { background:#ffebee; color:#c62828; }
+        .form-container { padding: 30px 25px; }
+        .bottle {
+            display: flex; gap: 20px;
+            background: #f9f9f9; padding: 18px;
+            border-radius: 14px; margin-bottom: 20px;
+            border: 1px solid #eee; align-items: center;
+        }
+        .bottle-img {
+            width: 115px; height: 145px;
+            object-fit: cover; border-radius: 12px;
+            border: 3px solid white; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .bottle-info { flex: 1; }
+        input[type="number"], input[type="text"] {
+            padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;
+        }
+        input[type="text"] { width: 100%; }
+        button {
+            background: var(--primary); color: white;
+            padding: 16px; font-size: 1.25em; font-weight: bold;
+            border: none; border-radius: 12px; cursor: pointer;
+            width: 100%; margin-top: 30px;
+        }
+        button:disabled { background: #aaa; cursor: not-allowed; }
+        .error, .success {
+            padding: 15px; border-radius: 8px; margin: 15px 0; font-weight: 500;
+        }
+        .error { background:#ffebee; color:#c62828; }
+        .success { background:#e8f5e9; color:#2e7d32; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="assets/images/gameBooth45Banner.png" alt="大會 Logo" class="banner">    
+            <p class="subtitle">Bottle Guess Challenge • 現場互動遊戲</p>
+        </header>
+
+        <div class="form-container">
+            <div id="status" class="status">載入中 / Loading...</div>
+
+            <form id="guessForm">
+                <!-- 1. Ticket Serial Number Input -->
+                <label><strong>Ticket Serial Number / 票券序號 (6 位數) <span style="color:red">*</span></strong></label>
+                <input type="text" id="serial" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required placeholder="請輸入 6 位數字序號 / Enter 6-digit ticket serial">
+
+                <!-- 2. On-Site Passcode Input -->
+                <label style="display:block; margin-top:15px;"><strong>On-Site Passcode / 現場密碼 (3 位數) <span style="color:red">*</span></strong></label>
+                <input type="text" id="passcode" maxlength="3" required placeholder="請參閱現場海報 / See poster on-site">
+
+                <h2 style="margin: 30px 0 15px 0;">請輸入猜測（可猜 1~5 瓶）</h2>
+                <div id="bottlesContainer"></div>
+
+                <button type="submit" id="submitBtn">提交猜測 / Submit Guesses</button>
+            </form>
+
+            <div id="message"></div>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbySiCIpFFPwm8dddH3kLzxfIhKy31MTvbz6V4kV9ohsyryL9p6cKwcq54rE5ZZ1Hqhk/exec";
+
+        let fullSchedule = [];
+        let bottlesByRound = {};
+        let activeRoundNum = null;
+        let consecutiveFailures = 0;
+
+        /**
+         * Local validation for 6-digit tickets with check-digits
+         */
+        function isValidSerial(rawSerial) {
+            if (!rawSerial) return false;
+            const cleanStr = rawSerial.toString().trim();
+            if (!/^\d{6}$/.test(cleanStr)) return false;
+
+            const prefix = parseInt(cleanStr.charAt(0), 10);
+            const midSeq = cleanStr.substring(1, 5);
+            const suffix = parseInt(cleanStr.charAt(5), 10);
+
+            const d1 = parseInt(midSeq.charAt(0), 10);
+            const d2 = parseInt(midSeq.charAt(1), 10);
+            const d3 = parseInt(midSeq.charAt(2), 10);
+            const d4 = parseInt(midSeq.charAt(3), 10);
+
+            const expectedPrefix = (d1 * 3 + d2 * 7 + d3 * 1 + d4 * 5) % 10;
+            if (prefix !== expectedPrefix) return false;
+
+            const expectedSuffix = (d1 * 9 + d2 * 4 + d3 * 6 + d4 * 2) % 10;
+            if (suffix !== expectedSuffix) return false;
+
+            return true;
+        }
+
+        /**
+         * Fetch setup configurations (full-day schedule + bottles)
+         */
+        async function fetchSystemConfig() {
+            try {
+                const res = await fetch(`${SCRIPT_URL}?action=getStatus&_=${Date.now()}`);
+                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+
+                const data = await res.json();
+                consecutiveFailures = 0;
+
+                fullSchedule = data.schedule || [];
+                bottlesByRound = data.bottlesByRound || {};
+
+                evaluateAndRenderGameState();
+            } catch (err) {
+                console.warn("Config sync error:", err);
+                consecutiveFailures++;
+                if (consecutiveFailures >= 3) {
+                    const statusEl = document.getElementById('status');
+                    statusEl.innerHTML = `無法連線後端 / Cannot connect to backend`;
+                    statusEl.className = "status closed";
+                }
+            }
+        }
+
+        /**
+         * Evaluate current active round using real-time local clock
+         */
+        function evaluateAndRenderGameState() {
+            const statusEl = document.getElementById('status');
+            const submitBtn = document.getElementById('submitBtn');
+            const form = document.getElementById('guessForm');
+
+            if (!fullSchedule || fullSchedule.length === 0) {
+                statusEl.innerHTML = `尚未設定遊戲時間 / Schedule not configured`;
+                statusEl.className = "status closed";
+                if (submitBtn) submitBtn.disabled = true;
+                return;
+            }
+
+            const now = new Date();
+            let currentActive = null;
+            let upcoming = null;
+
+            // Find current or next round
+            for (let r of fullSchedule) {
+                const start = new Date(r.startIso);
+                const end = new Date(r.endIso);
+
+                if (now >= start && now <= end) {
+                    currentActive = r;
+                    break;
+                }
+                if (now < start) {
+                    if (!upcoming || new Date(r.startIso) < new Date(upcoming.startIso)) {
+                        upcoming = r;
+                    }
+                }
+            }
+
+            // Case 1: Active Round
+            if (currentActive) {
+                const roundText = `第 ${currentActive.round} 節進行中 / Round ${currentActive.round} Open`;
+                const timeText = `<br><small>開放時間 / Time: ${currentActive.startTime} ~ ${currentActive.endTime}</small>`;
+                statusEl.innerHTML = `${roundText}${timeText}`;
+                statusEl.className = "status open";
+                form.style.display = 'block';
+                if (submitBtn) submitBtn.disabled = false;
+
+                if (activeRoundNum !== currentActive.round) {
+                    activeRoundNum = currentActive.round;
+                    renderBottlesForRound(activeRoundNum);
+                }
+            }
+            // Case 2: Intermission / Waiting for Next Round
+            else if (upcoming) {
+                const roundText = `第 ${upcoming.round} 節 準備中 / Round ${upcoming.round} Coming Soon`;
+                const timeText = `<br><small>預計開放時間 / Next Round: ${upcoming.startTime} ~ ${upcoming.endTime}</small>`;
+                statusEl.innerHTML = `${roundText}${timeText}`;
+                statusEl.className = "status closed";
+                form.style.display = 'block';
+                if (submitBtn) submitBtn.disabled = true;
+
+                if (activeRoundNum !== upcoming.round) {
+                    activeRoundNum = upcoming.round;
+                    renderBottlesForRound(activeRoundNum);
+                }
+            }
+            // Case 3: All Rounds Ended
+            else {
+                statusEl.innerHTML = `今日所有遊戲已結束<br><small>All rounds completed for today. Thank you!</small>`;
+                statusEl.className = "status closed";
+                form.style.display = 'none';
+                activeRoundNum = null;
+            }
+        }
+
+        /**
+         * Render bottles belonging to a specific round
+         */
+        function renderBottlesForRound(roundNum) {
+            const container = document.getElementById('bottlesContainer');
+            if (!container) return;
+
+            const bottles = bottlesByRound[roundNum] || [];
+
+            // Preserve typed input values
+            const savedValues = {};
+            bottles.forEach(b => {
+                const inputEl = document.getElementById(`value${b.id}`);
+                if (inputEl && inputEl.value !== "") {
+                    savedValues[b.id] = inputEl.value;
+                }
+            });
+
+            container.innerHTML = '';
+
+            if (bottles.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#777;">本節暫無瓶子資訊 / No bottle settings for this round</p>';
+                return;
+            }
+
+            bottles.forEach(b => {
+                const val = savedValues[b.id] !== undefined ? savedValues[b.id] : '';
+                const div = document.createElement('div');
+                div.className = 'bottle';
+                div.innerHTML = `
+                    <img src="${b.imgUrl}" class="bottle-img" alt="瓶 ${b.id}" onerror="this.src='https://via.placeholder.com/115x145?text=瓶${b.id}'">
+                    <div class="bottle-info">
+                        <strong>瓶 ${b.id} / Bottle ${b.id}</strong><br>
+                        <small>${b.desc} ${b.descEn ? '/ ' + b.descEn : ''}</small>
+                        <div style="margin-top:12px;">
+                            <input type="number" id="value${b.id}" value="${val}" placeholder="數值 / Value" min="0" style="width:100%;">
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+		/**
+		 * Async Submission Function
+		 */
+		async function submitGuess() {
+		    const submitBtn = document.getElementById('submitBtn');
+		    const messageEl = document.getElementById('message');
+		    const serialInput = document.getElementById('serial');
+		    const passcodeInput = document.getElementById('passcode');
+		    const bottles = bottlesByRound[activeRoundNum] || [];
+		
+		    messageEl.innerHTML = '';
+		
+		    // --- 1. FRONTEND INPUT VALIDATION ---
+		    const serialValue = serialInput ? serialInput.value.trim() : '';
+		    const passcodeValue = passcodeInput ? passcodeInput.value.trim() : '';
+		
+		    if (!serialValue) {
+		        messageEl.innerHTML = `<div class="error">請輸入票券序號 / Please enter ticket serial number</div>`;
+		        return;
+		    }
+		
+		    if (!passcodeValue) {
+		        messageEl.innerHTML = `<div class="error">請輸入現場密碼 / Please enter the passcode</div>`;
+		        return;
+		    }
+		
+		    // Process bottle guesses (optional fields allowed, but non-empty fields must be numeric)
+		    const guesses = [];
+		    let hasAtLeastOneGuess = false;
+		
+		    for (let i = 0; i < bottles.length; i++) {
+		        const b = bottles[i];
+		        const valInput = document.getElementById(`value${b.id}`);
+		        const rawVal = valInput ? valInput.value.trim() : '';
+		
+		        if (rawVal === '') {
+		            guesses.push(null);
+		        } else {
+		            const num = Number(rawVal);
+		            if (isNaN(num)) {
+		                messageEl.innerHTML = `<div class="error">瓶號 #${b.id} 猜數必須是數字 / Guess for bottle #${b.id} must be a number</div>`;
+		                if (valInput) valInput.focus();
+		                return;
+		            }
+		            guesses.push(num);
+		            hasAtLeastOneGuess = true;
+		        }
+		    }
+		
+		    if (!hasAtLeastOneGuess) {
+		        messageEl.innerHTML = `<div class="error">請至少填寫一個瓶子的猜數 / Please enter a guess for at least one bottle</div>`;
+		        return;
+		    }
+		
+		    // --- 2. CONSTRUCT PAYLOAD ---
+		    const formData = {
+		        serialNumber: serialValue,
+		        passcode: passcodeValue,
+		        guesses: guesses
+		    };
+		
+		    // --- 3. SUBMIT TO GAS ---
+		    submitBtn.disabled = true;
+		    submitBtn.innerText = "傳送中 / Submitting...";
+		
+		    try {
+		        const res = await fetch(SCRIPT_URL, {
+		            method: 'POST',
+		            body: JSON.stringify(formData),
+		            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+		        });
+		
+		        const result = await res.json();
+		
+		        if (result.success) {
+		            messageEl.innerHTML = `<div class="success">${result.message}</div>`;
+		
+		            // Clear fields upon success
+		            serialInput.value = '';
+		            passcodeInput.value = '';
+		            bottles.forEach(b => {
+		                const valInput = document.getElementById(`value${b.id}`);
+		                if (valInput) valInput.value = '';
+		            });
+		        } else {
+		            messageEl.innerHTML = `<div class="error">${result.message}</div>`;
+		        }
+		    } catch (err) {
+		        console.error("Submission Error:", err);
+		        messageEl.innerHTML = `<div class="error">連線錯誤，請稍後再試 / Network error, please try again</div>`;
+		    } finally {
+		        // Short cooldown before re-enabling button to avoid burst double-clicks
+		        setTimeout(() => {
+		            submitBtn.disabled = false;
+		            submitBtn.innerText = "提交猜測 / Submit Guesses";
+		        }, 1500);
+		    }
+		}
+
+        /**
+         * Form Submission Event Listener
+         */
+        document.getElementById('guessForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const messageEl = document.getElementById('message');
+
+            const serialInput = document.getElementById('serial');
+            const passcodeInput = document.getElementById('passcode');
+            const serial = serialInput.value.trim();
+            const passcode = passcodeInput.value.trim();
+
+            // 1. Client-Side Ticket Checksum Validation
+            if (!isValidSerial(serial)) {
+                messageEl.innerHTML = `<div class="error">票券序號無效或不合格式 / Invalid ticket serial number</div>`;
+                return;
+            }
+
+            // 2. Gather Guesses
+            const bottles = bottlesByRound[activeRoundNum] || [];
+            const guesses = {};
+            let guessCount = 0;
+
+            bottles.forEach(b => {
+                const valInput = document.getElementById(`value${b.id}`);
+                if (valInput && valInput.value !== "") {
+                    guesses[`b${b.id}`] = parseFloat(valInput.value);
+                    guessCount++;
+                }
+            });
+
+            if (!passcode || guessCount === 0) {
+                messageEl.innerHTML = `<div class="error">請填寫現場密碼並至少猜一瓶 / Please enter passcode and at least one guess</div>`;
+                return;
+            }
+
+            // 3. Construct Payload & Call submitGuess
+            const formData = {
+                round: activeRoundNum,
+                serialNumber: serial, 
+                passcode: passcode,
+                guesses: guesses 
+            };
+
+            submitGuess(formData);
+        });
+
+        window.onload = () => {
+            fetchSystemConfig();
+            // Local clock check every 1 second for instant round transition
+            setInterval(evaluateAndRenderGameState, 1000);
+            // Refresh config from server every 3 minutes as a backup sync
+            setInterval(fetchSystemConfig, 180000);
+        };
+    </script>
+</body>
+</html>

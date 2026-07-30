@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>猜中有獎 - 得獎名單 | Winners List</title>
+    
+    <!-- Firebase JS SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --primary-dark: #2980b9;
+            --bg-gradient: linear-gradient(135deg, #f0f4f8 0%, #c3cfe2 100%);
+            --card-bg: #ffffff;
+            --text-main: #2c3e50;
+            --text-muted: #7f8c8d;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-gradient);
+            margin: 0;
+            padding: 20px 15px;
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 920px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        header {
+            background: #FCF7F8;
+            color: #344054;
+            padding: 25px 20px;
+            text-align: center;
+        }
+        .banner { width: 100%; height: auto; display: block; }
+        .logo { max-height: 80px; margin-bottom: 12px; }
+        h1 { margin: 5px 0; font-size: 2.2em; font-weight: 700; letter-spacing: 0.5px; }
+        .subtitle { margin: 0; opacity: 0.9; font-size: 1.1em; }
+
+        /* Banner for Next Posting Time */
+        .next-posting-banner {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border-bottom: 2px solid #90caf9;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            text-align: center;
+        }
+
+        .banner-icon { font-size: 1.6em; }
+
+        .banner-text {
+            color: #1565c0;
+            font-size: 0.95em;
+            font-weight: 600;
+        }
+
+        .posting-time-highlight {
+            font-size: 1.1em;
+            color: #0d47a1;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        .content { padding: 30px 20px; }
+
+        .state-box {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 1.15em;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .round-card {
+            background: #fff;
+            border: 1px solid #e1e8ed;
+            border-radius: 14px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            overflow: hidden;
+        }
+
+        .round-header {
+            background: #f8fafc;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e1e8ed;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .round-title {
+            margin: 0;
+            font-size: 1.3em;
+            color: var(--primary-dark);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .table-responsive { width: 100%; overflow-x: auto; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #edf2f7;
+            font-size: 0.95em;
+        }
+
+        th {
+            background: #ffffff;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.82em;
+            letter-spacing: 0.5px;
+        }
+
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background-color: #f1f5f9; }
+
+        .bottle-badge {
+            background: #ebf5ff;
+            color: #006adc;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.95em;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .ticket-code {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: #2c3e50;
+        }
+
+        .no-winner {
+            color: #95a5a6;
+            font-style: italic;
+            background: #f8f9fa;
+            padding: 4px 10px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        .timestamp { color: var(--text-muted); font-size: 0.9em; }
+
+        .result-detail {
+            color: #4a5568;
+            font-weight: 500;
+            font-size: 0.92em;
+        }
+
+        .refresh-btn {
+            display: block;
+            width: 100%;
+            max-width: 260px;
+            margin: 25px auto 0 auto;
+            padding: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-align: center;
+        }
+        .refresh-btn:hover { background: var(--primary-dark); }
+        .refresh-btn:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <img src="assets/images/gameBooth45Banner.png" alt="Logo" class="banner" onerror="this.style.display='none'">
+            <h1>🏆 得獎名單</h1>
+            <p class="subtitle">Winners List</p>
+        </header>
+
+        <!-- NEXT POSTING TIME BANNER -->
+        <div id="nextPostingBanner" class="next-posting-banner" style="display: none;">
+            <span class="banner-icon">📢</span>
+            <div class="banner-text">
+                <div id="nextPostingTitle">下一節得獎名單公佈時間 / Next Winner Posting Time</div>
+                <div id="nextPostingTime" class="posting-time-highlight">--:--</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div id="loadingState" class="state-box">
+                <div class="spinner"></div>
+                載入中，請稍候... / Loading winners list...
+            </div>
+
+            <div id="errorState" class="state-box" style="display: none; color: #e74c3c;">
+                ❌ 無法載入得獎名單，請稍後再試。<br>
+                <small>Failed to load winners. Please try again later.</small>
+            </div>
+
+            <div id="emptyState" class="state-box" style="display: none;">
+                📢 目前尚無得獎資料 / No winners announced yet.
+            </div>
+
+            <div id="roundsContainer"></div>
+
+            <button class="refresh-btn" onclick="fetchWinners(true)">整理 / Refresh</button>
+        </div>
+    </div>
+
+    <script>
+        // --- FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            projectId: "guess-to-win-all"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        // CONSTANTS
+        const CACHE_KEY = 'winners_data_cache';
+        const CONFIG_CACHE_KEY = 'time_config_cache';
+        const TIMESTAMP_KEY = 'winners_cache_time';
+        const LAST_CLICK_KEY = 'winners_last_click_time';
+        const COOLDOWN_MS = 5 * 60 * 1000; // 5 MINUTES COOLDOWN
+
+        let cooldownInterval = null;
+
+        async function fetchWinners(forceRefresh = false) {
+            const loadingEl = document.getElementById('loadingState');
+            const errorEl = document.getElementById('errorState');
+            const emptyEl = document.getElementById('emptyState');
+            const containerEl = document.getElementById('roundsContainer');
+
+            if (forceRefresh && isCooldownActive()) {
+                return;
+            }
+
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            emptyEl.style.display = 'none';
+
+            const cachedData = localStorage.getItem(CACHE_KEY);
+            const cachedConfig = localStorage.getItem(CONFIG_CACHE_KEY);
+            const cachedTime = localStorage.getItem(TIMESTAMP_KEY);
+            const now = Date.now();
+
+            // --- 1. LOCALSTORAGE CACHE CHECK ---
+            if (!forceRefresh && cachedData && cachedTime && (now - Number(cachedTime) < COOLDOWN_MS)) {
+                loadingEl.style.display = 'none';
+                const winners = JSON.parse(cachedData);
+                
+                if (winners.length === 0) {
+                    emptyEl.style.display = 'block';
+                } else {
+                    renderWinners(winners);
+                }
+
+                if (cachedConfig) {
+                    updateNextPostingBanner(JSON.parse(cachedConfig));
+                }
+
+                checkButtonCooldown();
+                return;
+            }
+
+            // --- 2. FETCH FROM FIRESTORE ---
+            containerEl.innerHTML = '';
+
+            try {
+                // Fetch winners collection AND system > config document concurrently
+                const [winnersSnapshot, configDoc] = await Promise.all([
+                    db.collection("winners").get(),
+                    db.collection("system").doc("config").get().catch(() => null)
+                ]);
+
+                loadingEl.style.display = 'none';
+
+                // --- 2A. PROCESS CONFIG FIRST (ALWAYS BEFORE RETURNING) ---
+                let scheduleData = [];
+                if (configDoc && configDoc.exists) {
+                    const data = configDoc.data();
+                    scheduleData = data.schedule || data.timeConfig || [];
+                    localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(scheduleData));
+                }
+                updateNextPostingBanner(scheduleData);
+
+                // Record refresh click timestamp
+                if (forceRefresh) {
+                    localStorage.setItem(LAST_CLICK_KEY, Date.now().toString());
+                }
+
+                // --- 2B. PROCESS WINNERS DATA SECOND ---
+                if (winnersSnapshot.empty) {
+                    localStorage.setItem(CACHE_KEY, JSON.stringify([]));
+                    localStorage.setItem(TIMESTAMP_KEY, Date.now().toString());
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                const winners = [];
+                winnersSnapshot.forEach(doc => {
+                    winners.push(doc.data());
+                });
+
+                localStorage.setItem(CACHE_KEY, JSON.stringify(winners));
+                localStorage.setItem(TIMESTAMP_KEY, Date.now().toString());
+
+                renderWinners(winners);
+
+            } catch (err) {
+                console.error("Firestore Fetch Error:", err);
+                loadingEl.style.display = 'none';
+                errorEl.style.display = 'block';
+            } finally {
+                checkButtonCooldown();
+            }
+        }
+
+        // --- DYNAMIC POSTING BANNER LOGIC ---
+        function updateNextPostingBanner(schedule) {
+            const bannerEl = document.getElementById('nextPostingBanner');
+            const timeEl = document.getElementById('nextPostingTime');
+
+            if (!bannerEl || !timeEl || !Array.isArray(schedule) || schedule.length === 0) {
+                if (bannerEl) bannerEl.style.display = 'none';
+                return;
+            }
+
+            const now = new Date();
+            let nextPostingDate = null;
+            let upcomingRoundNum = null;
+
+            // Always parse using local HH:mm to avoid UTC/timezone skew
+            const parseLocalEndTime = (cfg) => {
+                const timeStr = cfg.endTime || cfg.EndTime;
+                if (!timeStr) return null;
+
+                const timeParts = String(timeStr).trim().split(':');
+                if (timeParts.length >= 2) {
+                    const hours = parseInt(timeParts[0], 10);
+                    const minutes = parseInt(timeParts[1], 10);
+                    if (!isNaN(hours) && !isNaN(minutes)) {
+                        const d = new Date(now);
+                        d.setHours(hours, minutes, 0, 0);
+                        return d;
+                    }
+                }
+                return null;
+            };
+
+            // Find earliest round where posting time (endTime + 5 mins) is in the future
+            for (const cfg of schedule) {
+                const roundEnd = parseLocalEndTime(cfg);
+                if (!roundEnd) continue;
+
+                // Posting Time = Round End Time + 5 minutes
+                const postingTime = new Date(roundEnd.getTime() + 5 * 60 * 1000);
+
+                if (postingTime > now) {
+                    nextPostingDate = postingTime;
+                    upcomingRoundNum = cfg.round || cfg.Round;
+                    break;
+                }
+            }
+
+            if (!nextPostingDate) {
+                bannerEl.style.display = 'none';
+                return;
+            }
+
+            const hoursStr = String(nextPostingDate.getHours()).padStart(2, '0');
+            const minsStr = String(nextPostingDate.getMinutes()).padStart(2, '0');
+            const formattedPostingTime = `${hoursStr}:${minsStr}`;
+
+            const diffMs = nextPostingDate - now;
+            const diffMins = Math.ceil(diffMs / (1000 * 60));
+
+            bannerEl.style.display = 'flex';
+            
+            if (diffMins <= 0) {
+                timeEl.innerHTML = `第 ${upcomingRoundNum} 節：即將公佈！ / Round ${upcomingRoundNum}: Announcing Soon!`;
+            } else {
+                timeEl.innerHTML = `第 ${upcomingRoundNum} 節：${formattedPostingTime} (約 ${diffMins} 分鐘後) / Round ${upcomingRoundNum}: ${formattedPostingTime} (in ~${diffMins} mins)`;
+            }
+        }
+
+        function isCooldownActive() {
+            const lastClick = localStorage.getItem(LAST_CLICK_KEY);
+            if (!lastClick) return false;
+            return (Date.now() - Number(lastClick)) < COOLDOWN_MS;
+        }
+
+        function checkButtonCooldown() {
+            const refreshBtn = document.querySelector('.refresh-btn');
+            if (!refreshBtn) return;
+
+            if (cooldownInterval) clearInterval(cooldownInterval);
+
+            const lastClick = localStorage.getItem(LAST_CLICK_KEY);
+            if (!lastClick) {
+                refreshBtn.disabled = false;
+                refreshBtn.innerText = "整理 / Refresh";
+                return;
+            }
+
+            const updateTimer = () => {
+                const elapsed = Date.now() - Number(lastClick);
+                const remaining = COOLDOWN_MS - elapsed;
+
+                if (remaining <= 0) {
+                    clearInterval(cooldownInterval);
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerText = "整理 / Refresh";
+                } else {
+                    refreshBtn.disabled = true;
+                    const mins = Math.floor(remaining / 60000);
+                    const secs = Math.floor((remaining % 60000) / 1000);
+                    const formattedSecs = String(secs).padStart(2, '0');
+                    refreshBtn.innerText = `再試 ${mins}:${formattedSecs} / Retry ${mins}:${formattedSecs}`;
+                }
+            };
+
+            updateTimer();
+            cooldownInterval = setInterval(updateTimer, 1000);
+        }
+
+        function renderWinners(rawWinners) {
+            const container = document.getElementById('roundsContainer');
+            container.innerHTML = '';
+
+            const groupedRounds = {};
+            rawWinners.forEach(item => {
+                const round = item.round;
+                if (!groupedRounds[round]) groupedRounds[round] = [];
+                groupedRounds[round].push(item);
+            });
+
+            const sortedRounds = Object.keys(groupedRounds).map(Number).sort((a, b) => b - a);
+
+            sortedRounds.forEach(roundNum => {
+                const winnersList = groupedRounds[roundNum];
+                winnersList.sort((a, b) => a.bottleId - b.bottleId);
+
+                const card = document.createElement('div');
+                card.className = 'round-card';
+
+                let rowsHtml = '';
+                winnersList.forEach(w => {
+                    const isNoWinner = !w.serialNumber || w.serialNumber === "NO QUALIFIED WINNER";
+                    const formattedSerial = formatSerialNumber(w.serialNumber);
+                    
+                    const ticketDisplay = isNoWinner 
+                        ? `<span class="no-winner">無得獎者 / No Winner</span>` 
+                        : `<span class="ticket-code">${escapeHtml(formattedSerial)}</span>`;
+
+                    const timeDisplay = isNoWinner || !w.timestamp 
+                        ? `-` 
+                        : `<span class="timestamp">${formatTimeOnly(w.timestamp)}</span>`;
+
+                    const resultDisplay = formatBilingualResult(w.resultDetail);
+
+                    rowsHtml += `
+                        <tr>
+                            <td><span class="bottle-badge"># ${w.bottleId}</span></td>
+                            <td>${ticketDisplay}</td>
+                            <td>${timeDisplay}</td>
+                            <td><span class="result-detail">${resultDisplay}</span></td>
+                        </tr>
+                    `;
+                });
+
+                card.innerHTML = `
+                    <div class="round-header">
+                        <h3 class="round-title">🎯 第 ${roundNum} 節 / Round ${roundNum}</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>瓶號 / Bottle</th>
+                                    <th>票券序號 / Ticket Serial</th>
+                                    <th>時間 / Time</th>
+                                    <th>結果 / Result</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function formatSerialNumber(val) {
+            if (val === null || val === undefined || val === '') return '';
+            const strVal = String(val).trim();
+            if (isNaN(strVal)) return strVal;
+            return strVal.padStart(6, '0');
+        }
+
+        function formatBilingualResult(rawDetail) {
+            if (!rawDetail) return '-';
+
+            const winnerMatch = String(rawDetail).match(/Bottle\s*\d+:\s*([\d.]+)\s*\(Actual:\s*([\d.]+)\)/i);
+            if (winnerMatch) {
+                const guessVal = winnerMatch[1];
+                const actualVal = winnerMatch[2];
+                return `猜數 Guess: ${guessVal} | 答案 Answer: ${actualVal}`;
+            }
+
+            const noWinnerMatch = String(rawDetail).match(/Actual:\s*([\d.]+)/i);
+            if (noWinnerMatch) {
+                const actualVal = noWinnerMatch[1];
+                return `答案 Answer: ${actualVal}`;
+            }
+
+            return escapeHtml(rawDetail);
+        }
+
+        function formatTimeOnly(timestampStr) {
+            if (!timestampStr) return '-';
+            const dateObj = new Date(timestampStr);
+            if (!isNaN(dateObj.getTime())) {
+                return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            }
+            const match = String(timestampStr).match(/\d{1,2}:\d{2}(:\d{2})?/);
+            return match ? match[0] : timestampStr;
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        window.onload = function() {
+            fetchWinners(false);
+        };
+    </script>
+</body>
+</html>

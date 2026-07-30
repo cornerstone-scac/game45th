@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Emergency Round Winner Calculator (5 Bottles)</title>
+    <!-- Firebase JS SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background: #f4f6f8; color: #333; }
+        .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px; align-items: center; }
+        input, button { padding: 10px; font-size: 0.95em; border-radius: 6px; border: 1px solid #ccc; width: 100%; box-sizing: border-box; }
+        button { background: #006adc; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        button:hover { background: #0052b0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+        th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; }
+        th { background: #f0f4f8; }
+        .highlight { font-weight: bold; color: #d9534f; }
+        .doc-box { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #006adc; padding: 10px 15px; margin-bottom: 12px; border-radius: 4px; }
+        .doc-box h4 { margin: 0 0 6px 0; color: #1e293b; }
+        .doc-box ul { margin: 0; padding-left: 20px; font-family: monospace; font-size: 0.95em; }
+        .count-badge { background: #e2e8f0; color: #1e293b; padding: 4px 10px; border-radius: 12px; font-size: 0.85em; margin-left: 8px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>🚨 Emergency Winner Selection Tool (5 Bottles)</h2>
+    
+    <div class="card">
+        <div style="margin-bottom: 12px;">
+            <label><strong>Round Number:</strong></label>
+            <input type="number" id="roundInput" value="1" min="1" style="width: 120px; display: inline-block;">
+        </div>
+
+        <label><strong>Actual Target Values:</strong></label>
+        <div class="controls-grid">
+            <div><small>Bottle 1</small><input type="number" id="actual1" placeholder="e.g. 500" step="any"></div>
+            <div><small>Bottle 2</small><input type="number" id="actual2" placeholder="e.g. 750" step="any"></div>
+            <div><small>Bottle 3</small><input type="number" id="actual3" placeholder="e.g. 1200" step="any"></div>
+            <div><small>Bottle 4</small><input type="number" id="actual4" placeholder="e.g. 350" step="any"></div>
+            <div><small>Bottle 5</small><input type="number" id="actual5" placeholder="e.g. 900" step="any"></div>
+        </div>
+
+        <button onclick="calculateWinners()">Calculate Winners for All 5 Bottles</button>
+    </div>
+
+    <!-- CALCULATED WINNERS OUTPUT FOR MANUAL FS ENTRY -->
+    <div class="card">
+        <h3>📋 Calculated Winners (For Firestore Console Entry)</h3>
+        <div id="winnersOutput">Enter actual values for all 5 bottles and click Calculate.</div>
+    </div>
+
+    <!-- RAW SUBMISSIONS TABLE -->
+    <div class="card">
+        <h3>📥 Submissions Audit List <span id="recordCountBadge" class="count-badge">Total Records: 0</span></h3>
+        <div id="submissionsList">No submissions loaded yet.</div>
+    </div>
+
+    <script>
+        // --- FIREBASE INITIALIZATION ---
+        const firebaseConfig = { projectId: "guess-to-win-all" };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // Helper to safely parse dates matching GAS safeParseDate logic
+        function safeParseDate(val) {
+            if (!val) return null;
+            if (val instanceof Date && !isNaN(val.getTime())) return val;
+            const d = new Date(val);
+            return !isNaN(d.getTime()) ? d : null;
+        }
+
+        // Helper to consistently extract guess array across formats
+        function parseGuessesArray(rawGuesses) {
+            if (!rawGuesses) return [];
+            let guesses = rawGuesses;
+
+            // Handle stringified JSON
+            if (typeof guesses === 'string') {
+                try { guesses = JSON.parse(guesses); } catch (e) { return []; }
+            }
+
+            // Handle Map/Object format {"b1": 10, "b2": 20} or {"1": 10, "2": 20}
+            if (!Array.isArray(guesses) && typeof guesses === 'object') {
+                const arr = [];
+                for (let i = 1; i <= 5; i++) {
+                    arr.push(guesses[`b${i}`] ?? guesses[i] ?? guesses[i - 1] ?? null);
+                }
+                return arr;
+            }
+
+            return Array.isArray(guesses) ? guesses : [];
+        }
+
+        async function calculateWinners() {
+            const roundNum = parseInt(document.getElementById('roundInput').value, 10);
+            
+            const actuals = {};
+            let missingInputs = false;
+            for (let b = 1; b <= 5; b++) {
+                const val = parseFloat(document.getElementById(`actual${b}`).value);
+                if (isNaN(val)) {
+                    missingInputs = true;
+                } else {
+                    actuals[b] = val;
+                }
+            }
+
+            if (missingInputs) {
+                alert("Please enter actual target values for all 5 bottles.");
+                return;
+            }
+
+            const submissionsListEl = document.getElementById('submissionsList');
+            const winnersOutputEl = document.getElementById('winnersOutput');
+            const recordCountBadge = document.getElementById('recordCountBadge');
+
+            submissionsListEl.innerHTML = "Loading submissions from Firestore...";
+            winnersOutputEl.innerHTML = "Processing...";
+            recordCountBadge.textContent = "Total Records: ...";
+
+            try {
+                // Fetch submissions for target round
+                const snapshot = await db.collection("submissions")
+                                         .where("round", "==", roundNum)
+                                         .get();
+
+                if (snapshot.empty) {
+                    submissionsListEl.innerHTML = `<p class="highlight">No submissions found for Round ${roundNum}.</p>`;
+                    winnersOutputEl.innerHTML = "No candidates to evaluate.";
+                    recordCountBadge.textContent = "Total Records: 0";
+                    return;
+                }
+
+                // Deduplicate submissions by Ticket Serial Number (keep latest timestamp)
+                const latestSubmissionsMap = new Map();
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const serialNum = String(data.serialNumber || data.ticketCode || "").trim();
+                    const rawTime = data.timestamp;
+                    const timestamp = safeParseDate(rawTime);
+
+                    if (serialNum) {
+                        const existing = latestSubmissionsMap.get(serialNum);
+                        if (!existing || (timestamp && existing.timestamp && timestamp >= existing.timestamp)) {
+                            latestSubmissionsMap.set(serialNum, {
+                                serialNum: serialNum,
+                                timestamp: timestamp || new Date(0),
+                                rawTimestampStr: String(rawTime || new Date().toISOString()),
+                                guesses: parseGuessesArray(data.guesses)
+                            });
+                        }
+                    }
+                });
+
+                const validSubmissions = Array.from(latestSubmissionsMap.values());
+                // Sort in place
+				validSubmissions.sort((a, b) => {
+				  // Option 1: Sort by timestamp (newest first)
+				  //  return new Date(b.timestamp) - new Date(a.timestamp);
+				  
+				  // Option 2: Sort by timestamp (oldest first)
+				  // return new Date(a.timestamp) - new Date(b.timestamp);
+				
+				  // Option 3: Sort alphabetically by a property like name
+				     return a.serialNum.localeCompare(b.serialNum);
+				});
+                recordCountBadge.textContent = `Total Records: ${validSubmissions.length}`;
+
+                // --- 1. RENDER SUBMISSIONS AUDIT TABLE ---
+                let tableHtml = `
+                    <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Ticket Serial</th>
+                                <th>Bottle 1</th>
+                                <th>Bottle 2</th>
+                                <th>Bottle 3</th>
+                                <th>Bottle 4</th>
+                                <th>Bottle 5</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                validSubmissions.forEach((s, idx) => {
+                    const g = s.guesses || [];
+                    
+                    const formatGuess = (val) => {
+                        return (val !== undefined && val !== null && val !== "") ? val : '-';
+                    };
+
+                    tableHtml += `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td><strong>${s.serialNum}</strong></td>
+                            <td>${formatGuess(g[0])}</td>
+                            <td>${formatGuess(g[1])}</td>
+                            <td>${formatGuess(g[2])}</td>
+                            <td>${formatGuess(g[3])}</td>
+                            <td>${formatGuess(g[4])}</td>
+                            <td>${s.rawTimestampStr}</td>
+                        </tr>
+                    `;
+                });
+                tableHtml += `</tbody></table></div>`;
+                submissionsListEl.innerHTML = tableHtml;
+
+                // --- 2. MATCH WINNER EVALUATION ---
+                const bottleRankings = {};
+
+                [1, 2, 3, 4, 5].forEach(bottleId => {
+                    const targetValue = actuals[bottleId];
+                    const bottleGuesses = [];
+
+                    if (targetValue !== undefined) {
+                        validSubmissions.forEach(sub => {
+                            const idx = bottleId - 1;
+                            const rawVal = sub.guesses[idx];
+                            const guessVal = (rawVal !== undefined && rawVal !== null && rawVal !== "") ? Number(rawVal) : undefined;
+
+                            // Evaluate closest without going over target
+                            if (guessVal !== undefined && !isNaN(guessVal) && guessVal <= targetValue) {
+                                const diff = targetValue - guessVal;
+                                bottleGuesses.push({
+                                    serialNum: sub.serialNum,
+                                    timestamp: sub.timestamp,
+                                    rawTimestampStr: sub.rawTimestampStr,
+                                    guessVal: guessVal,
+                                    diff: diff
+                                });
+                            }
+                        });
+
+                        // Sort by closest diff first, tie-break by earliest timestamp
+                        bottleGuesses.sort((a, b) => {
+                            if (a.diff !== b.diff) return a.diff - b.diff;
+                            return (a.timestamp ? a.timestamp.getTime() : 0) - (b.timestamp ? b.timestamp.getTime() : 0);
+                        });
+                    }
+
+                    bottleRankings[bottleId] = bottleGuesses;
+                });
+
+                // Assign winners with duplicate player elimination (1 winner per player max across bottles)
+                const finalWinners = [];
+                const winningSerials = new Set();
+
+                [1, 2, 3, 4, 5].forEach(bottleId => {
+                    const candidates = bottleRankings[bottleId] || [];
+                    const winner = candidates.find(c => !winningSerials.has(c.serialNum));
+
+                    if (winner) {
+                        winningSerials.add(winner.serialNum);
+                        finalWinners.push({
+                            round: roundNum,
+                            bottleId: bottleId,
+                            serialNumber: winner.serialNum,
+                            timestamp: winner.rawTimestampStr,
+                            resultDetail: `Bottle ${bottleId}: ${winner.guessVal} (Actual: ${actuals[bottleId]})`
+                        });
+                    } else {
+                        finalWinners.push({
+                            round: roundNum,
+                            bottleId: bottleId,
+                            serialNumber: "NO QUALIFIED WINNER",
+                            timestamp: "-",
+                            resultDetail: `Actual: ${actuals[bottleId] || 'N/A'}`
+                        });
+                    }
+                });
+
+                // --- 3. RENDER EXACT FIRESTORE ENTRY STRUCTURE ---
+                let outputHtml = "";
+                finalWinners.forEach(w => {
+                    const docId = `R${w.round}_B${w.bottleId}`;
+
+                    outputHtml += `
+                        <div class="doc-box">
+                            <h4>Document ID: <code>${docId}</code></h4>
+                            <ul>
+                                <li><strong>round</strong> (number): <code>${w.round}</code></li>
+                                <li><strong>bottleId</strong> (number): <code>${w.bottleId}</code></li>
+                                <li><strong>serialNumber</strong> (string): <code>"${w.serialNumber}"</code></li>
+                                <li><strong>timestamp</strong> (string): <code>"${w.timestamp}"</code></li>
+                                <li><strong>resultDetail</strong> (string): <code>"${w.resultDetail}"</code></li>
+                            </ul>
+                        </div>
+                    `;
+                });
+
+                winnersOutputEl.innerHTML = outputHtml;
+
+            } catch (err) {
+                console.error("Fetch Error:", err);
+                submissionsListEl.innerHTML = `<p class="highlight">Error reading submissions: ${err.message}</p>`;
+                winnersOutputEl.innerHTML = "Error occurred.";
+                recordCountBadge.textContent = "Total Records: Error";
+            }
+        }
+    </script>
+</body>
+</html>
